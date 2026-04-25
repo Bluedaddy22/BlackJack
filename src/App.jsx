@@ -26,6 +26,8 @@ import { getBasicStrategyDecision } from './utils/basicStrategy.js';
 const DEAL_ANIMATION_MS = 380;
 const DISCARD_ANIMATION_MS = 640;
 const ROUND_END_PAUSE_MS = 240;
+const SPLIT_SEPARATION_MS = 520;
+const SPLIT_DEAL_PAUSE_MS = 140;
 const tabs = ['Play', 'Strategy', 'Stats'];
 
 const initialStats = {
@@ -73,6 +75,8 @@ function App() {
   const [tableAnimations, setTableAnimations] = useState([]);
   const [discardPileCount, setDiscardPileCount] = useState(0);
   const [isDiscarding, setIsDiscarding] = useState(false);
+  const [hiddenCardIds, setHiddenCardIds] = useState([]);
+  const [isSplitAnimating, setIsSplitAnimating] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const tableRef = useRef(null);
@@ -147,6 +151,8 @@ function App() {
     setDealerHand(roundDealerHand);
     setPlayerHands(outcomes);
     setPhase('round-over');
+    setHiddenCardIds([]);
+    setIsSplitAnimating(false);
 
     const summary = outcomes.map((hand, index) => `Hand ${index + 1}: ${formatOutcomeLabel(hand.outcome)}`);
     setStatusText(summary.join(' | '));
@@ -236,10 +242,9 @@ function App() {
     return handPanel?.querySelector('.cards-row') ?? handPanel ?? playerTargetRef.current;
   };
 
-  const getDealCoordinates = (target, options = {}) => {
+  const getCardTargetCoordinates = (target, options = {}) => {
     const normalizedTarget = typeof target === 'string' ? { seat: target } : target;
     const tableRect = tableRef.current?.getBoundingClientRect();
-    const shoeRect = shoeRef.current?.getBoundingClientRect();
     const targetRect = getTargetElement(normalizedTarget)?.getBoundingClientRect();
     const seat = normalizedTarget.seat ?? 'player';
     const finalCount = Math.max(1, options.finalCount ?? (options.cardIndex ?? 0) + 1);
@@ -247,20 +252,52 @@ function App() {
     const slotOffset = (cardIndex - (finalCount - 1) / 2) * (seat === 'dealer' ? 32 : 36);
     const slotLift = Math.abs(cardIndex - (finalCount - 1) / 2) * (seat === 'dealer' ? 6 : 8);
 
-    if (!tableRect || !shoeRect || !targetRect) {
+    if (!tableRect || !targetRect) {
       return {
-        fromX: 760,
-        fromY: 72,
         toX: seat === 'dealer' ? 430 : 430,
         toY: seat === 'dealer' ? 170 : 590,
       };
     }
 
     return {
-      fromX: shoeRect.left - tableRect.left + shoeRect.width / 2 - 56,
-      fromY: shoeRect.top - tableRect.top + shoeRect.height / 2 - 80,
       toX: targetRect.left - tableRect.left + targetRect.width / 2 - 56 + slotOffset,
       toY: targetRect.top - tableRect.top + targetRect.height / 2 - 80 + slotLift,
+    };
+  };
+
+  const getDealCoordinates = (target, options = {}) => {
+    const tableRect = tableRef.current?.getBoundingClientRect();
+    const shoeRect = shoeRef.current?.getBoundingClientRect();
+    const targetCoordinates = getCardTargetCoordinates(target, options);
+
+    if (!tableRect || !shoeRect) {
+      return {
+        fromX: 760,
+        fromY: 72,
+        ...targetCoordinates,
+      };
+    }
+
+    return {
+      fromX: shoeRect.left - tableRect.left + shoeRect.width / 2 - 56,
+      fromY: shoeRect.top - tableRect.top + shoeRect.height / 2 - 80,
+      ...targetCoordinates,
+    };
+  };
+
+  const getCardRectCoordinates = (cardRect) => {
+    const tableRect = tableRef.current?.getBoundingClientRect();
+
+    if (!tableRect || !cardRect) {
+      return {
+        fromX: 430,
+        fromY: 590,
+      };
+    }
+
+    return {
+      fromX: cardRect.left - tableRect.left,
+      fromY: cardRect.top - tableRect.top,
     };
   };
 
@@ -273,6 +310,21 @@ function App() {
       faceDown: Boolean(options.faceDown),
       durationMs: options.durationMs ?? DEAL_ANIMATION_MS,
       ...getDealCoordinates(target, options),
+    });
+
+  const animateSplitCardToHand = (card, cardRect, target, options = {}) =>
+    queueCardAnimation({
+      id: `split-${dealAnimationIdRef.current += 1}`,
+      card,
+      target,
+      variant: 'split',
+      durationMs: options.durationMs ?? SPLIT_SEPARATION_MS,
+      fromRotate: options.fromRotate ?? 0,
+      toRotate: options.toRotate ?? 0,
+      fromScale: 1,
+      toScale: 1,
+      ...getCardRectCoordinates(cardRect),
+      ...getCardTargetCoordinates(target, options),
     });
 
   const getDiscardCoordinates = (cardRect, stackIndex = 0) => {
@@ -373,6 +425,8 @@ function App() {
 
     setFeedback(null);
     setIsAnimating(true);
+    setHiddenCardIds([]);
+    setIsSplitAnimating(false);
     setPhase('dealing');
     setDealerHand([]);
     setPlayerHands([]);
@@ -568,6 +622,59 @@ function App() {
     });
 
     setIsAnimating(true);
+    setIsSplitAnimating(true);
+
+    const handPanels = playerTargetRef.current?.querySelectorAll('.hand-panel');
+    const currentCards = Array.from(
+      handPanels?.[activeHandIndex]?.querySelectorAll('.playing-card') ?? [],
+    );
+
+    const previewHands = [
+      ...playerHands.slice(0, activeHandIndex),
+      {
+        ...createPreviewHand(activeHand, [firstCard]),
+        handId: `${activeHand.handId}-a`,
+        isSplitHand: true,
+      },
+      {
+        ...createPreviewHand(activeHand, [secondCard]),
+        handId: `${activeHand.handId}-b`,
+        isSplitHand: true,
+      },
+      ...playerHands.slice(activeHandIndex + 1),
+    ];
+
+    setPlayerHands(previewHands);
+    setHiddenCardIds([firstCard.id, secondCard.id]);
+
+    await waitForNextPaint();
+
+    await Promise.all([
+      animateSplitCardToHand(
+        firstCard,
+        currentCards[0]?.getBoundingClientRect(),
+        { seat: 'player', handIndex: activeHandIndex },
+        {
+          cardIndex: 0,
+          finalCount: 1,
+          toRotate: -8,
+        },
+      ),
+      animateSplitCardToHand(
+        secondCard,
+        currentCards[1]?.getBoundingClientRect(),
+        { seat: 'player', handIndex: activeHandIndex + 1 },
+        {
+          cardIndex: 0,
+          finalCount: 1,
+          toRotate: 8,
+        },
+      ),
+    ]);
+
+    setHiddenCardIds([]);
+    await wait(SPLIT_DEAL_PAUSE_MS);
+
     await animateCardFromShoe(
       firstDraw.hand.cards[firstDraw.hand.cards.length - 1],
       { seat: 'player', handIndex: activeHandIndex },
@@ -576,6 +683,19 @@ function App() {
         finalCount: firstDraw.hand.cards.length,
       },
     );
+
+    const partialHands = [
+      ...playerHands.slice(0, activeHandIndex),
+      { ...firstDraw.hand, handId: `${activeHand.handId}-a` },
+      {
+        ...createPreviewHand(activeHand, [secondCard]),
+        handId: `${activeHand.handId}-b`,
+        isSplitHand: true,
+      },
+      ...playerHands.slice(activeHandIndex + 1),
+    ];
+    setPlayerHands(partialHands);
+
     await animateCardFromShoe(
       secondDraw.hand.cards[secondDraw.hand.cards.length - 1],
       { seat: 'player', handIndex: activeHandIndex + 1 },
@@ -603,11 +723,13 @@ function App() {
     setPlayerHands(nextHands);
 
     if (firstPlayableIndex === -1) {
+      setIsSplitAnimating(false);
       await animateDealerResolution(dealerHand, secondDraw.shoe, nextHands);
       return;
     }
 
     setActiveHandIndex(firstPlayableIndex);
+    setIsSplitAnimating(false);
     setIsAnimating(false);
   };
 
@@ -678,6 +800,8 @@ function App() {
               roundResult={roundResult}
               animations={tableAnimations}
               isDiscarding={isDiscarding}
+              hiddenCardIds={hiddenCardIds}
+              isSplitAnimating={isSplitAnimating}
               cardBackColor={cardBackColor}
             />
 

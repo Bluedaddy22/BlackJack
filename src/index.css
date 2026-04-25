@@ -760,7 +760,7 @@ button {
 .player-zone {
   position: absolute;
   left: 50%;
-  width: min(calc(100% - 84px), 420px);
+  width: min(calc(100% - 84px), 760px);
   transform: translateX(-50%);
   bottom: clamp(116px, 12vw, 134px);
   z-index: 1;
@@ -770,6 +770,31 @@ button {
   display: grid;
   gap: 18px;
   justify-items: center;
+}
+
+.player-hands.single-layout {
+  justify-items: center;
+}
+
+.player-hands.split-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(18px, 3vw, 42px);
+}
+
+.player-hands.split-layout .hand-panel {
+  max-width: 280px;
+  padding: 14px 12px 10px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(8, 8, 10, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.player-hands.split-layout .hand-panel.active {
+  border-color: rgba(221, 177, 93, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(221, 177, 93, 0.28),
+    0 18px 28px rgba(0, 0, 0, 0.18);
 }
 
 .hand-header {
@@ -797,6 +822,52 @@ button {
 
 .hand-panel.headerless .cards-row {
   margin-top: 0;
+}
+
+.hand-inline-summary {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hand-inline-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hand-inline-label {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hand-inline-active {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(221, 177, 93, 0.95);
+  color: #231b10;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.hand-inline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .total-chip,
@@ -849,6 +920,10 @@ button {
   min-height: 132px;
 }
 
+.player-hands.split-layout .cards-row.player {
+  width: min(100%, 250px);
+}
+
 .playing-card,
 .deal-fly-card {
   position: relative;
@@ -865,6 +940,10 @@ button {
   margin-left: calc(-1 * var(--card-overlap, 0px));
   transform: translateX(var(--card-shift, 0px)) translateY(var(--card-lift)) rotate(var(--card-rotation));
   transform-origin: center 88%;
+}
+
+.playing-card.is-hidden {
+  opacity: 0;
 }
 
 .cards-row .playing-card:first-child {
@@ -1116,6 +1195,14 @@ button {
   margin-top: 10px;
 }
 
+.hand-note {
+  margin: 0;
+  color: rgba(255, 246, 218, 0.88);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .rank,
 .suit {
   line-height: 1;
@@ -1179,6 +1266,10 @@ button {
 }
 
 .deal-fly-card.discard {
+  z-index: 5;
+}
+
+.deal-fly-card.split {
   z-index: 5;
 }
 
@@ -1754,8 +1845,17 @@ button {
   }
 
   .player-zone {
-    width: min(calc(100% - 40px), 278px);
+    width: min(calc(100% - 40px), 540px);
     bottom: 94px;
+  }
+
+  .player-hands.split-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .player-hands.split-layout .hand-panel {
+    max-width: 320px;
   }
 
   .deck-stack {
